@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { supabase } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, BACKEND_NOT_CONFIGURED_MESSAGE } from '../lib/supabase'
 
 const DEFAULT_CENTER = [19.0760, 72.8777]
 
@@ -229,8 +229,13 @@ export default function FleetMap({
             const shipmentDbId = button.getAttribute('data-shipment')
             const statusEl = root.querySelector('[data-action-status]')
 
-            if (!shipmentDbId) {
-              if (statusEl) statusEl.textContent = 'Database shipment ID unavailable'
+            if (!isSupabaseConfigured) {
+              if (statusEl) statusEl.textContent = BACKEND_NOT_CONFIGURED_MESSAGE
+              return
+            }
+
+            if (!shipmentDbId || shipmentDbId.startsWith('fallback-')) {
+              if (statusEl) statusEl.textContent = 'Demo shipment: no database record to update. Seed supabase/schema.sql first.'
               return
             }
 
@@ -253,7 +258,12 @@ export default function FleetMap({
               }
               window.dispatchEvent(new Event('coldlife-refresh'))
             } catch (error) {
-              if (statusEl) statusEl.textContent = error?.message || 'Action failed'
+              const msg = error?.message || 'Action failed'
+              if (statusEl) {
+                statusEl.textContent = /failed to fetch/i.test(msg)
+                  ? 'Cannot reach Supabase. Check VITE_SUPABASE_URL and that the project is not paused.'
+                  : msg
+              }
             } finally {
               button.disabled = false
             }

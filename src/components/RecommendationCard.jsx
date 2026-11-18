@@ -94,7 +94,9 @@ export default function RecommendationCard({ shipment, onAccept }) {
       const result = await getGeminiPrediction(s)
       setPrediction({ ...result, source: result.cached ? 'gemini-cache' : 'gemini' })
     } catch (e) {
-      setError('Gemini refinement unavailable; showing instant prediction.')
+      console.warn('[ColdLife] Gemini prediction failed:', e)
+      const reason = e?.message ? ` (${e.message})` : ''
+      setError(`Gemini refinement unavailable${reason}. Showing instant prediction.`)
     } finally {
       setLoading(false)
     }

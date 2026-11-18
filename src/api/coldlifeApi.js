@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, BACKEND_NOT_CONFIGURED_MESSAGE } from '../lib/supabase'
 
 const num = (v, fallback = 0) => {
   const n = Number(v)
@@ -568,6 +568,10 @@ export async function resetSimulation() {
 }
 
 export async function performShipmentAction(identifier, actionName, notes = '') {
+  if (!isSupabaseConfigured) {
+    console.warn('[ColdLife]', BACKEND_NOT_CONFIGURED_MESSAGE)
+    return { ok: false, fallback: true, error: BACKEND_NOT_CONFIGURED_MESSAGE }
+  }
   const shipment = await getShipment(identifier)
   let action = String(actionName || '').toUpperCase()
 
@@ -612,6 +616,7 @@ export async function getGeminiPrediction(shipmentOrIdentifier) {
     : shipmentOrIdentifier
 
   if (!shipment) throw new Error('Shipment is required for AI prediction')
+  if (!isSupabaseConfigured) throw new Error(BACKEND_NOT_CONFIGURED_MESSAGE)
 
   const cacheKey = shipment.id || shipment.shipmentId
   const cached = geminiPredictionCache.get(cacheKey)
@@ -644,7 +649,16 @@ export async function getGeminiPrediction(shipmentOrIdentifier) {
     body: payload,
   })
 
-  if (error) throw error
+  if (error) {
+    // FunctionsHttpError carries the Edge Function's response body (e.g. missing
+    // GEMINI_API_KEY, Gemini 4xx/5xx). Surface it instead of a generic message.
+    let detail = error.message
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) detail = body.error
+    } catch { /* body not JSON; keep generic message */ }
+    throw new Error(detail || 'Edge Function request failed')
+  }
   if (!data?.prediction) throw new Error(data?.error || 'Gemini prediction did not return a result')
 
   geminiPredictionCache.set(cacheKey, { time: Date.now(), value: data.prediction })
